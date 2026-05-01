@@ -571,7 +571,7 @@ async function sbFetch(table,method='GET',body=null,filter=''){
   if(method==='POST'||method==='PATCH') headers['Prefer']='return=minimal';
   try{
     const res=await fetch(`${SB_URL}/rest/v1/${table}${filter}`,{
-      method,headers,body:body?JSON.stringify(body):undefined
+      method,headers,body:body?JSON.stringify(body):null
     });
     if(!res.ok){const e=await res.text();console.error('SB오류:',method,table,e);return null;}
     if(method==='DELETE'||method==='PATCH') return true;
