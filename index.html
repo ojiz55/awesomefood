@@ -388,7 +388,7 @@ tr:hover td{background:#f0f4ff;}
   </div>
   <div class="section-header">
     <div class="section-title">매입원장 목록 (로트별)</div>
-    <button class="btn btn-outline" onclick="if(confirm('전체 삭제?')){purchaseData=[];renderPurchaseTable();updateSummary();}">🗑 전체삭제</button>
+    <button class="btn btn-outline" onclick="if(confirm('전체 삭제?')){clearAllPurchaseDB();}">🗑 전체삭제</button>
   </div>
   <div class="table-wrap"><table>
     <thead><tr><th>날짜</th><th>공급처</th><th>품목</th><th>등급/비고</th><th>매입수량</th><th>단위당단가</th><th>매입금액</th><th>kg환산재고</th><th>잔여(kg)</th><th>조정</th><th>삭제</th></tr></thead>
@@ -607,6 +607,21 @@ async function clearAllSalesDB(){
     });
     salesData=[];
     renderSalesTable();
+    updateSummary();
+    showToast('✅ 전체 삭제 완료!');
+  }catch(e){console.error(e);}
+  showLoading(false);
+}
+
+async function clearAllPurchaseDB(){
+  showLoading(true);
+  try{
+    await fetch(`${SB_URL}/rest/v1/purchase_lots?id=neq.00000000-0000-0000-0000-000000000000`,{
+      method:'DELETE',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'}
+    });
+    purchaseData=[];
+    renderPurchaseTable();
     updateSummary();
     showToast('✅ 전체 삭제 완료!');
   }catch(e){console.error(e);}
@@ -1392,11 +1407,18 @@ function renderProfit(){
 function expandDate(d){
   if(!d) return '';
   const s=String(d).trim();
-  const m1=s.match(/^(\d{4})[\\/\-](\d{1,2})[\\/\-](\d{1,2})/);
+  // yyyy-mm-dd 형식
+  const m1=s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
   if(m1) return m1[1].slice(2)+'/'+m1[2].padStart(2,'0')+'/'+m1[3].padStart(2,'0');
+  // 이미 yy/mm/dd 형식 (6자리)
   if(s.match(/^\d{2}\/\d{2}\/\d{2}$/)) return s;
-  const m2=s.match(/^(\d{2})\/(\d{2})$/);
-  if(m2){const yy=String(new Date().getFullYear()).slice(2);return yy+'/'+m2[1]+'/'+m2[2];}
+  // mm/dd 형식 (월이 01-12인 경우만) → yy/mm/dd
+  const m2=s.match(/^(0[1-9]|1[0-2])\/(\d{2})$/);
+  if(m2){
+    const yy=String(new Date().getFullYear()).slice(2);
+    return yy+'/'+m2[1]+'/'+m2[2];
+  }
+  // 그 외 (26/04 같은 잘못된 형식) → 그대로 반환
   return s;
 }
 
