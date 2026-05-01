@@ -1223,42 +1223,108 @@ function updateSummary(){
 
 function renderStock(){
   const c=document.getElementById('stock-container');
-  if(!purchaseData.length){c.innerHTML='<div class="empty-state"><div class="ei">🌾</div>매입 데이터를 입력하면 재고가 자동으로 계산됩니다</div>';return;}
-  const items={};
-  purchaseData.forEach(p=>{if(!items[p.item])items[p.item]=[];items[p.item].push(p);});
+  if(!purchaseData.length){
+    c.innerHTML='<div class="empty-state"><div class="ei">🌾</div>매입 데이터를 입력하면 재고가 자동으로 계산됩니다</div>';
+    return;
+  }
+
+  const searchEl=document.getElementById('stock-search');
+  const keyword=(searchEl?searchEl.value.trim().toLowerCase():'');
+
   const emojis={양파:'🧅',청양고추:'🌶',대파:'🥬',감자:'🥔',시금치:'🌿',마늘:'🧄',당근:'🥕',배추:'🥦',오이:'🥒',무우:'🌱',무:'🌱',양배추:'🥬',고추:'🌶'};
   const emoji=n=>{for(const k in emojis)if(n.includes(k))return emojis[k];return'🌾';};
-  let html='<div class="stock-grid">';
+
+  // 검색 필터링
+  const filtered = purchaseData.filter(p=>{
+    if(!keyword) return true;
+    return p.item.toLowerCase().includes(keyword) ||
+           p.supplier.toLowerCase().includes(keyword) ||
+           (p.grade||'').toLowerCase().includes(keyword);
+  });
+
+  // 품목별 그룹
+  const items={};
+  filtered.forEach(p=>{if(!items[p.item])items[p.item]=[];items[p.item].push(p);});
+
+  const itemCount = Object.keys(items).length;
+  const countEl = document.getElementById('stock-count');
+  if(countEl) countEl.textContent = keyword ? `검색결과: ${itemCount}개 품목` : `총 ${itemCount}개 품목`;
+
+  if(!itemCount){
+    c.innerHTML=`<div class="empty-state"><div class="ei">🔍</div>"${keyword}" 검색 결과가 없습니다</div>`;
+    return;
+  }
+
+  // 세로형 테이블
+  let html=`<div class="table-wrap"><table>
+    <thead><tr>
+      <th>품목</th>
+      <th>공급처</th>
+      <th>등급/비고</th>
+      <th>매입일</th>
+      <th>매입단위</th>
+      <th>매입단가</th>
+      <th>kg단가</th>
+      <th>원래재고</th>
+      <th>잔여재고</th>
+      <th>소진율</th>
+      <th>조정</th>
+    </tr></thead>
+    <tbody>`;
+
   for(const [item,lots] of Object.entries(items)){
     const totalR=lots.reduce((s,l)=>s+l.remaining,0);
     const totalKg=lots.reduce((s,l)=>s+l.kgStock,0);
-    const pct=totalKg>0?Math.round(totalR/totalKg*100):0;
-    const low=pct<20;
-    html+=`<div class="stock-card">
-      <div class="stock-name">${emoji(item)} ${item}
-        <span class="${low?'badge badge-red':'badge badge-green'}" style="font-size:10px">${totalR.toLocaleString()}kg</span>
-      </div>
-      ${lots.map(l=>{
-        const llow=l.remaining<l.kgStock*0.15;
-        const kgP=l.kgStock>0?(l.totalCost/l.kgStock).toFixed(0):0;
-        const unitInfo=l.buyUnit==='kg'?`${l.price.toLocaleString()}원/kg`:`${l.price.toLocaleString()}원/${l.buyUnit}(=${parseInt(kgP).toLocaleString()}원/kg)`;
-        return `<div class="stock-lot-item">
-          <div class="sli-top">
-            <div class="sli-name">${l.supplier}${l.grade?` <span class="sr-grade" style="font-size:10px">${l.grade}</span>`:''}</div>
-            <div class="sli-remain ${llow?'inv-low':'inv-ok'}">${l.remaining.toLocaleString()}kg${llow?' ⚠':''}</div>
+    const low=totalR<totalKg*0.2;
+
+    lots.forEach((l,i)=>{
+      const llow=l.remaining<l.kgStock*0.15;
+      const kgP=l.kgStock>0?Math.round(l.totalCost/l.kgStock):0;
+      const unitInfo=l.buyUnit==='kg'?'kg':l.buyUnit;
+      const pct=l.kgStock>0?Math.round(l.remaining/l.kgStock*100):0;
+      const lotIdx=purchaseData.indexOf(l);
+      const isFirst=i===0;
+      const rowspan=lots.length;
+
+      html+=`<tr style="${llow?'background:#fff5f5':''}">
+        ${isFirst?`<td rowspan="${rowspan}" style="font-weight:700;font-size:14px;border-right:2px solid #e0e4ef;background:#f8f9ff;">
+          <div style="display:flex;align-items:center;gap:6px;">${emoji(item)} ${item}</div>
+          <div style="margin-top:4px;font-size:11px;font-weight:400;color:${low?'#e53935':'#1565c0'}">
+            총 ${totalR.toLocaleString()}kg ${low?'⚠ 부족':''}
           </div>
-          <div class="sli-bottom">
-            <span class="sli-detail">${l.date}</span>
-            <span class="sli-detail">${unitInfo}</span>
-            ${l.adjLogs&&l.adjLogs.length?`<span class="adj-log">조정${l.adjLogs.length}회</span>`:''}
+        </td>`:''}
+        <td>${l.supplier}</td>
+        <td>${l.grade?`<span class="sr-grade">${l.grade}</span>`:'—'}</td>
+        <td class="mono" style="color:#6b7280;font-size:11px">${l.date}</td>
+        <td style="font-size:12px">${l.qty.toLocaleString()}${unitInfo}${l.buyUnit!=='kg'?` (${l.unitKg}kg/${unitInfo})`:''}</td>
+        <td class="mono" style="color:#e65100;font-weight:700">${l.price.toLocaleString()}원/${unitInfo}</td>
+        <td class="mono" style="color:#6b7280;font-size:11px">${kgP.toLocaleString()}원/kg</td>
+        <td class="mono">${l.kgStock.toLocaleString()}kg</td>
+        <td class="mono" style="font-weight:700;color:${llow?'#e53935':'#1565c0'}">${l.remaining.toLocaleString()}kg${llow?' ⚠':''}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="flex:1;height:6px;background:#e0e4ef;border-radius:3px;min-width:50px;">
+              <div style="height:6px;border-radius:3px;background:${llow?'#e53935':'#1976d2'};width:${pct}%"></div>
+            </div>
+            <span style="font-size:11px;color:#6b7280;white-space:nowrap">${pct}%</span>
           </div>
-        </div>`;
-      }).join('')}
-      <div class="stock-total-row"><span>총 잔여</span><span class="${low?'inv-low':'inv-ok'}">${totalR.toLocaleString()}kg</span></div>
-      <div class="stock-bar-wrap"><div class="stock-bar ${low?'low':''}" style="width:${pct}%"></div></div>
-    </div>`;
+        </td>
+        <td><button class="btn btn-orange" style="font-size:11px;padding:3px 8px;white-space:nowrap" onclick="openAdjModal(${lotIdx})">⚖ 조정</button></td>
+      </tr>`;
+    });
+
+    // 품목 소계 행
+    if(lots.length > 1){
+      html+=`<tr style="background:#f0f4ff;border-top:2px solid #1976d2;">
+        <td style="border-right:2px solid #e0e4ef;"></td>
+        <td colspan="7" style="font-size:12px;color:#6b7280;font-weight:600">소계</td>
+        <td class="mono" style="font-weight:700;color:${low?'#e53935':'#1565c0'}">${totalR.toLocaleString()}kg</td>
+        <td colspan="2"></td>
+      </tr>`;
+    }
   }
-  html+='</div>';
+
+  html+=`</tbody></table></div>`;
   c.innerHTML=html;
 }
 
