@@ -301,7 +301,7 @@ tr:hover td{background:rgba(76,175,80,.04);}
   </div>
   <div class="section-header">
     <div class="section-title">매출원장 목록</div>
-    <button class="btn btn-outline" onclick="if(confirm('전체 삭제?')){salesData=[];renderSalesTable();updateSummary();}">🗑 전체삭제</button>
+    <button class="btn btn-outline" onclick="if(confirm('전체 삭제?')){clearAllSalesDB();}">🗑 전체삭제</button>
   </div>
   <div class="table-wrap"><table>
     <thead><tr><th>날짜</th><th>거래처</th><th>품목</th><th>수량(kg)</th><th>매출단가</th><th>매출금액</th><th>매입원가</th><th>이익</th><th>마진율</th><th>처리</th></tr></thead>
@@ -585,6 +585,28 @@ async function dbSaveSale(s){return sbFetch('sales','POST',{id:s.id,date:s.date,
 async function dbUpdateSale(s){return sbFetch('sales','PATCH',{cost_amount:s.costAmount,profit:s.profit,cost_desc:s.costDesc},`?id=eq.${s.id}`);}
 async function dbSaveAdj(a){return sbFetch('adj_logs','POST',{lot_id:a.lotId,item:a.item,lot_desc:a.lotDesc,before_qty:a.before,diff:a.diff,after_qty:a.after,reason:a.reason,memo:a.memo||''});}
 
+async function clearAllSalesDB(){
+  showLoading(true);
+  try{
+    await fetch(`${SB_URL}/rest/v1/sales?id=neq.00000000-0000-0000-0000-000000000000`,{
+      method:'DELETE',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'}
+    });
+    salesData=[];
+    renderSalesTable();
+    updateSummary();
+    showToast('✅ 전체 삭제 완료!');
+  }catch(e){console.error(e);}
+  showLoading(false);
+}
+
+async function deleteSaleDB(id){
+  await fetch(`${SB_URL}/rest/v1/sales?id=eq.${id}`,{
+    method:'DELETE',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'}
+  });
+}
+
 async function loadFromDB(){
   showLoading(true);
   try{
@@ -704,9 +726,16 @@ function showExcelPreview(type,headers,rows,fname){
   </select></div>`).join('');
 }
 function guessCol(headers,key){
-  const map={date:['날짜','일자','거래일','거래년월일'],client:['거래처','거래처명'],supplier:['공급처','거래처명','공급자'],
-    item:['품목','품목명','품명'],qty:['수량'],price:['단가','매출단가','매입단가'],
-    note:['비고','비고사항'],grade:['등급','비고','비고사항']};
+  const map={
+    date:['날짜','일자','거래일','거래일자','거래년월일'],
+    client:['거래처명','거래처','납품처','고객명'],
+    supplier:['공급처','공급처명','거래처명','공급자'],
+    item:['품목명','품명','품목','상품명'],
+    qty:['수량'],
+    price:['단가','매출단가','매입단가'],
+    note:['비고사항','비고'],
+    grade:['등급','규격','비고사항','비고']
+  };
   for(let i=0;i<headers.length;i++){
     const h=headers[i].toLowerCase();
     if((map[key]||[]).some(c=>h.includes(c.toLowerCase()))) return i;
