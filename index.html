@@ -60,6 +60,8 @@ th{font-size:11px;font-weight:700;color:var(--text-dim);text-transform:uppercase
 td{padding:10px 12px;font-size:13px;border-bottom:1px solid var(--border);vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
 tr:hover td{background:#f0f4ff;}
+#stock-container th{padding:7px 10px;font-size:10px;}
+#stock-container td{padding:6px 10px;font-size:12px;}
 .mono{font-family:'JetBrains Mono',monospace;font-size:12px;}
 .profit-pos{color:#1565c0;font-weight:700;}
 .profit-neg{color:#e53935;font-weight:700;}
@@ -818,7 +820,7 @@ async function addSalesRow(){
   const price=parseFloat(document.getElementById('s-price').value);
   const note=document.getElementById('s-note').value.trim();
   if(!date||!client||!item||!qty||!price){showToast('필수 항목을 입력해주세요');return;}
-  const sale={id:uid(),date:date.substring(5).replace('-','/'),client,item,qty,price,
+  const sale={id:uid(),date:(()=>{const d=new Date(date);const yy=String(d.getFullYear()).slice(2);return`${yy}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;})() ,client,item,qty,price,
     total:qty*price,costAmount:null,profit:null,costDesc:'',note};
   salesData.push(sale);
   await dbSaveSale(sale);
@@ -837,7 +839,7 @@ async function addPurchaseRow(){
   if(!date||!supplier||!item||!qty||!price){showToast('필수 항목을 입력해주세요');return;}
   const totalCost=qty*price;
   const kgStock=buyUnit==='kg'?qty:qty*unitKg;
-  const lot={id:uid(),date:date.substring(5).replace('-','/'),supplier,item,grade,
+  const lot={id:uid(),date:(()=>{const d=new Date(date);const yy=String(d.getFullYear()).slice(2);return`${yy}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;})() ,supplier,item,grade,
     buyUnit,unitKg,qty,price,totalCost,kgStock,remaining:kgStock,adjLogs:[]};
   purchaseData.push(lot);
   await dbSavePurchase(lot);
@@ -876,7 +878,9 @@ function renderSalesTable(){
       <td class="mono ${hasCost?pc:''}">${hasCost?(profit>=0?'+':'')+profit.toLocaleString()+'원':'—'}</td>
       <td class="mono ${hasCost?pc:''}">${hasCost?margin+'%':'—'}</td>
       <td>${hasCost?`<span class="badge badge-green">✓완료</span>`:
-        `<button class="cost-btn" onclick="openCostModal(${i})">⚠ 원가선택</button>`}</td>
+        `<button class="cost-btn" onclick="openCostModal(${i})">⚠ 원가선택</button>`}
+        <button class="btn btn-outline" style="font-size:11px;padding:3px 8px;color:#e53935;border-color:#fca5a5;margin-left:4px;" onclick="deleteSaleRow(${i})">삭제</button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -906,7 +910,25 @@ function renderPurchaseTable(){
     </tr>`;
   }).join('');
 }
-async function deletePurchase(i){const id=purchaseData[i].id;purchaseData.splice(i,1);await dbDeletePurchase(id);renderPurchaseTable();updateSummary();showToast('✅ 삭제됨');}
+async function deleteSaleRow(i){
+  if(!confirm('정말 삭제하시겠습니까?\n삭제된 데이터는 복구되지 않습니다.')) return;
+  const id=salesData[i].id;
+  salesData.splice(i,1);
+  await deleteSaleDB(id);
+  renderSalesTable();
+  updateSummary();
+  showToast('✅ 삭제 완료');
+}
+
+async function deletePurchase(i){
+  if(!confirm('정말 삭제하시겠습니까?\n삭제된 데이터는 복구되지 않습니다.')) return;
+  const id=purchaseData[i].id;
+  purchaseData.splice(i,1);
+  await dbDeletePurchase(id);
+  renderPurchaseTable();
+  updateSummary();
+  showToast('✅ 삭제 완료');
+}
 
 // ================= 원가선택 모달 =================
 function openCostModal(saleIdx){
@@ -1286,8 +1308,8 @@ function renderStock(){
       const isFirst=i===0;
       const rowspan=lots.length;
 
-      html+=`<tr style="${llow?'background:#fff5f5':''}">
-        ${isFirst?`<td rowspan="${rowspan}" style="font-weight:700;font-size:14px;border-right:2px solid #e0e4ef;background:#f8f9ff;">
+      html+=`<tr style="${llow?'background:#fff5f5':''};">
+        ${isFirst?`<td rowspan="${rowspan}" style="font-weight:700;font-size:13px;border-right:2px solid #e0e4ef;background:#f8f9ff;padding:6px 10px;">
           <div style="display:flex;align-items:center;gap:6px;">${emoji(item)} ${item}</div>
           <div style="margin-top:4px;font-size:11px;font-weight:400;color:${low?'#e53935':'#1565c0'}">
             총 ${totalR.toLocaleString()}kg ${low?'⚠ 부족':''}
@@ -1364,11 +1386,28 @@ function uid(){
 }
 function fmtDate(val){
   if(!val)return'';
-  if(val instanceof Date)return`${String(val.getMonth()+1).padStart(2,'0')}/${String(val.getDate()).padStart(2,'0')}`;
+  if(val instanceof Date){
+    const yy=String(val.getFullYear()).slice(2);
+    return`${yy}/${String(val.getMonth()+1).padStart(2,'0')}/${String(val.getDate()).padStart(2,'0')}`;
+  }
   const s=String(val);const num=parseFloat(s);
-  if(!isNaN(num)&&num>40000){try{const d=new Date(Math.round((num-25569)*86400000));return`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;}catch(e){}}
+  if(!isNaN(num)&&num>40000){
+    try{
+      const d=new Date(Math.round((num-25569)*86400000));
+      const yy=String(d.getFullYear()).slice(2);
+      return`${yy}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+    }catch(e){}
+  }
+  // yyyy-mm-dd 형식
+  const full=s.match(/(\d{2,4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+  if(full){
+    const yy=full[1].length===4?full[1].slice(2):full[1];
+    return`${yy}/${full[2].padStart(2,'0')}/${full[3].padStart(2,'0')}`;
+  }
+  // mm/dd 형식 (기존)
   const m=s.match(/(\d{1,2})[\/\-\.](\d{1,2})/);
-  return m?`${m[1].padStart(2,'0')}/${m[2].padStart(2,'0')}`:s.substring(0,10);
+  if(m) return `${m[1].padStart(2,'0')}/${m[2].padStart(2,'0')}`;
+  return s.substring(0,10);
 }
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 
