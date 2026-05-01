@@ -400,7 +400,17 @@ tr:hover td{background:#f0f4ff;}
 <div class="tab-content" id="tab-stock">
   <div class="section-header">
     <div class="section-title">품목별 재고현황 (로트 단위)</div>
-    <span style="font-size:12px;color:var(--text-dim)" id="stock-date"></span>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="position:relative;">
+        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);">🔍</span>
+        <input type="text" id="stock-search" placeholder="품목명·공급처 검색"
+          oninput="renderStock()"
+          style="padding:7px 12px 7px 32px;border:1.5px solid #e0e4ef;border-radius:7px;font-size:12px;font-family:'Noto Sans KR',sans-serif;outline:none;background:#fff;color:#1a1a2e;width:200px;"
+          onfocus="this.style.borderColor='#1976d2'" onblur="this.style.borderColor='#e0e4ef'">
+      </div>
+      <span id="stock-count" style="font-size:12px;color:#6b7280;white-space:nowrap;"></span>
+      <span style="font-size:12px;color:var(--text-dim)" id="stock-date"></span>
+    </div>
   </div>
   <div id="stock-container"><div class="empty-state"><div class="ei">🌾</div>매입 데이터를 입력하면 재고가 자동 계산됩니다</div></div>
 </div>
@@ -618,8 +628,8 @@ async function loadFromDB(){
       sbFetch('sales','GET',null,'?order=created_at.asc'),
       sbFetch('adj_logs','GET',null,'?order=created_at.asc'),
     ]);
-    purchaseData=(purchases||[]).map(p=>({id:p.id,date:p.date,supplier:p.supplier,item:p.item,grade:p.grade||'',buyUnit:p.buy_unit||'kg',unitKg:p.unit_kg||1,qty:p.qty,price:p.price,totalCost:p.total_cost,kgStock:p.kg_stock,remaining:p.remaining,note:p.note||'',adjLogs:[]}));
-    salesData=(sales||[]).map(s=>({id:s.id,date:s.date,client:s.client,item:s.item,qty:s.qty,price:s.price,total:s.total,costAmount:s.cost_amount,profit:s.profit,costDesc:s.cost_desc||'',note:s.note||''}));
+    purchaseData=(purchases||[]).map(p=>({id:p.id,date:expandDate(p.date),supplier:p.supplier,item:p.item,grade:p.grade||'',buyUnit:p.buy_unit||'kg',unitKg:p.unit_kg||1,qty:p.qty,price:p.price,totalCost:p.total_cost,kgStock:p.kg_stock,remaining:p.remaining,note:p.note||'',adjLogs:[]}));
+    salesData=(sales||[]).map(s=>({id:s.id,date:expandDate(s.date),client:s.client,item:s.item,qty:s.qty,price:s.price,total:s.total,costAmount:s.cost_amount,profit:s.profit,costDesc:s.cost_desc||'',note:s.note||''}));
     (adjs||[]).forEach(a=>{
       const lot=purchaseData.find(p=>p.id===a.lot_id);
       const t=new Date(a.created_at).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
@@ -1378,6 +1388,23 @@ function renderProfit(){
 }
 
 // ================= UTILS =================
+// 날짜 확장 함수 - DB에서 불러올 때 연도 없으면 현재연도 추가
+function expandDate(d){
+  if(!d) return '';
+  // 이미 yy/mm/dd 형식
+  if(d.match(/^\d{2}\/\d{2}\/\d{2}$/)) return d;
+  // yyyy-mm-dd 형식
+  const full = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(full) return `${full[1].slice(2)}/${full[2]}/${full[3]}`;
+  // mm/dd 형식 (기존 데이터) - 현재연도 앞에 추가
+  const short = d.match(/^(\d{2})\/(\d{2})$/);
+  if(short){
+    const yy = String(new Date().getFullYear()).slice(2);
+    return `${yy}/${short[1]}/${short[2]}`;
+  }
+  return d;
+}
+
 function uid(){
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){
     const r=Math.random()*16|0;
